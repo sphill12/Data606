@@ -1,0 +1,641 @@
+---
+title: "DATA 606 Data Project Proposal"
+author: "Steve Phillips"
+output: pdf_document
+---
+
+### Data Preparation
+```{r}
+library(readr)
+library(tidyverse)
+library(openintro)
+library(ggpubr)
+library(performance)
+library(afex)
+library(car)
+library(ggpubr)
+options(scipen=999, digits =  10)
+```
+
+```{r setup, echo=TRUE, results='hide', warning=FALSE, message=FALSE}
+# load data
+df <- read_csv("data 606 dataset.csv")
+```
+```{r}
+new_data <- df %>% subset(select = c(UNITID,OPEID6, INSTNM, CONTROL,MAIN,CIPCODE,CIPDESC,CREDLEV,CREDDESC,IPEDSCOUNT1,IPEDSCOUNT2,DEBT_ALL_PP_ANY_MDN10YRPAY,DEBT_ALL_STGP_ANY_MEAN,EARN_MDN_1YR,EARN_MDN_HI_1YR,EARN_MDN_HI_2YR,EARN_NE_MDN_3YR,DISTANCE))
+
+```
+```{r}
+new_data <- new_data %>% mutate_all(~ifelse(. == "PrivacySuppressed", NA, .))
+new_data <- new_data %>% mutate_all(~ifelse(. == "NULL", NA, .))
+new_data <- new_data %>% mutate(EARN_MDN_1YR = as.integer(EARN_MDN_1YR))
+new_data <- new_data %>% mutate(EARN_NE_MDN_3YR = as.integer(EARN_NE_MDN_3YR))
+```
+
+```{r}
+new_data  
+```
+```{r}
+example_data <- new_data %>% 
+  subset(select = c(INSTNM, CONTROL, CIPDESC, CREDLEV, EARN_MDN_1YR, EARN_NE_MDN_3YR, DEBT_ALL_STGP_ANY_MEAN))
+example_data <- example_data %>% 
+  rename(institution = INSTNM, school_type = CONTROL, degree = CIPDESC, median_earnings_1yr = EARN_MDN_1YR, median_earnings_3yr = EARN_NE_MDN_3YR, student_debt = DEBT_ALL_STGP_ANY_MEAN)
+```
+```{r}
+example_data <- example_data %>% filter(school_type != "Foreign")
+```
+```{r}
+example_data <- example_data %>% 
+  mutate(school_type_joined = case_when(school_type %in% c("Private, for-profit", "Private, nonprofit") ~ "private", TRUE ~ school_type))
+example_data
+```
+```{r}
+school_type_combined <- example_data %>% 
+  group_by(school_type) %>% 
+  filter(CREDLEV == 3) %>%
+  summarise(mean_income =  mean(median_earnings_1yr, na.rm = TRUE))
+school_type_combined
+
+```
+```{r}
+example_data %>%
+  aov(median_earnings_1yr ~ school_type_joined, data = .) %>%
+  TukeyHSD()
+```
+
+
+
+```{r}
+missing <- as.data.frame(colSums(is.na(example_data)))
+colnames(missing)[0] = "column_Name"
+colnames(missing)[1] = "missing_values"
+missing
+```
+```{r}
+
+```
+
+
+
+
+### Research question 
+
+**You should phrase your research question in a way that matches up with the scope of inference your dataset allows for.**
+I would like to look at multiple factors which may have an impact on median income after 1 year for colleges. The first thing that I would like to look at is whether attending a public versus private institution impacts the median income of students. After, I would like to look at the most common major and analyze the 1 year returns for them.
+
+
+### Cases 
+
+**What are the cases, and how many are there?**
+Each case represents a different major for for a college. There are 233,979 observations in the dataset, but many of them contain incomplete data, as indicated by the rows which say "PrivacySuppressed". It is possible that the dataset isn't complete enough to make the research question valid, but I would like to attempt it.
+
+
+### Data collection 
+
+**Describe the method of data collection.**
+
+The data collection procedure is described at https://collegescorecard.ed.gov/assets/FieldOfStudyDataDocumentation.pdf. The data is collected by the college scorecard, division of the U.S. Department of Education
+
+### Type of study 
+
+**What type of study is this (observational/experiment)?**
+
+This is an observational study
+
+### Data Source 
+
+**If you collected the data, state self-collected. If not, provide a citation/link.**
+
+The data is collected from here: https://collegescorecard.ed.gov/data
+
+
+### Dependent Variable
+
+**What is the response variable? Is it quantitative or qualitative?**
+
+The response variable is median income 1 year after graduation. The data is quantitative
+
+### Independent Variable(s)
+
+The independent variable is whether it is a public or private school. This is categorical.
+
+
+### Relevant summary statistics 
+
+**Provide summary statistics for each the variables. Also include appropriate visualizations related to your research question (e.g. scatter plot, boxplots, etc). This step requires the use of R, hence a code chunk is provided below. Insert more code chunks as needed.**
+
+
+```{r}
+school_type <- new_data %>% group_by(CONTROL) %>% summarise(mean_income =  mean(EARN_MDN_1YR, na.rm = TRUE))
+school_type
+```
+```{r}
+school_type %>% ggplot(aes(x = CONTROL, y = mean_income)) + geom_bar(stat = "identity") + xlab("School Type") + ylab("Mean Income") + ggtitle("Income based on school type")
+```
+
+
+```{r}
+example_data %>% group_by(school_type) %>% summary(EARN_MDN_1YR)
+```
+```{r}
+new_data %>% ggplot(aes(x = CONTROL, y = EARN_MDN_1YR)) + geom_boxplot() + ylab("Median Income") + xlab("Education Type") + ggtitle("Education Type Vs 1 Year Post Graduation Income")
+```
+```{r}
+new_data %>% 
+  filter(CONTROL == "Foreign") %>% 
+  ggplot(aes(x = EARN_MDN_1YR)) + 
+    geom_histogram() + 
+    ggtitle("Income of Foreign Schools Histogram") + 
+    xlab("Median 1 year income")
+```
+```{r}
+foreign <- new_data %>% 
+  filter(CONTROL == "Foreign")
+foreign_filtered <- foreign %>% filter(!is.na(EARN_MDN_1YR))
+foreign_filtered$EARN_MDN_1YR <- as.double(foreign_filtered$EARN_MDN_1YR)
+p <- ggplot(foreign, aes(sample = EARN_MDN_1YR))
+p + stat_qq() + stat_qq_line()
+```
+```{r}
+new_data %>% 
+  filter(CONTROL == "Public") %>% 
+  ggplot(aes(sample = EARN_MDN_1YR)) + 
+  stat_qq() +
+  stat_qq_line() +
+  ggtitle("QQ Plot Public Schools")
+```
+```{r}
+new_data %>% 
+  filter(CONTROL == "Private, for-profit") %>% 
+  ggplot(aes(sample = EARN_MDN_1YR)) + 
+  stat_qq() +
+  stat_qq_line() +
+  ggtitle("QQ Plot for Private, for-profit Schools")
+```
+```{r}
+
+new_data %>% 
+  filter(CONTROL == "Private, nonprofit") %>% 
+  ggplot(aes(sample = EARN_MDN_1YR)) + 
+  stat_qq() +
+  stat_qq_line() +
+  ggtitle("QQ Plot for Private, nonprofit Schools")
+
+```
+```{r}
+private_nonprofit <- new_data %>% 
+  filter(CONTROL == "Private, nonprofit")
+ggdensity(private_nonprofit$EARN_MDN_1YR,add = "mean") +
+  geom_vline(xintercept = 36000) + 
+  annotate("text", x = 32000, y = 0.000005, label = "36000", angle = 90)
+```
+```{r}
+private_forprofit <- new_data %>%
+  filter(CONTROL == "Private, for-profit")
+ggdensity(private_forprofit$EARN_MDN_1YR, add = "mean") + 
+  geom_vline(xintercept = 23000) + 
+  annotate("text", x = 20000, y = 0.000005, label = "23000", angle = 90)
+
+```
+```{r}
+public <- new_data %>% 
+  filter(CONTROL == "Public")
+ggdensity(public$EARN_MDN_1YR, add = "mean") +
+  geom_vline(xintercept = 33000) + 
+  annotate("text", x = 29000, y = 0.000005, label = "33000", angle = 90)
+
+```
+```{r}
+foreign <- new_data %>%
+  filter(CONTROL == "Foreign")
+ggdensity(foreign$EARN_MDN_1YR, add = "mean") +
+  geom_vline(xintercept = 57000) + 
+  annotate("text", x = 60000, y = 0.000005, label = "57000", angle = 90 )
+```
+
+
+
+
+
+
+
+
+```{r}
+new_data %>% 
+  filter(CONTROL == "Private, for-profit") %>% 
+  ggplot(aes(x = EARN_MDN_1YR)) + geom_histogram() + 
+  ggtitle("Income of for profit private schools Histogram") + 
+  xlab("Median 1 year income")
+```
+```{r}
+new_data %>% 
+  filter(CONTROL == "Private, nonprofit") %>% 
+  ggplot(aes(x = EARN_MDN_1YR)) + geom_histogram() + 
+  ggtitle("Income of nonprofit private schools Histogram") + 
+  xlab("Median 1 year income")
+```
+```{r}
+new_data %>% filter(CONTROL == "Public") %>% ggplot(aes(x = EARN_MDN_1YR)) + geom_histogram() + ggtitle("Income of nonprofit private schools Histogram") + xlab("Median 1 year income")
+```
+```{r}
+new_data %>%
+  aov(EARN_MDN_1YR ~ CONTROL, data = .) %>%
+  summary()
+```
+```{r}
+model <-  new_data %>%
+  aov(EARN_MDN_1YR ~ CONTROL, data = .)
+```
+
+
+
+
+```{r}
+new_data %>%
+  aov(EARN_MDN_1YR ~ CONTROL, data = .) %>%
+  TukeyHSD()
+```
+```{r fig.height= 8}
+par(mar = c(15,15,2,9))
+
+plot(TukeyHSD(model, conf.level = .95), las = 2, cex.axis = 0.75) 
+```
+
+
+
+## Assumptions of ANOVA
+1. The population from sample should be normally distributed (already broken)
+2. The sample cases should be independant of eachother(true)
+3. The variance of the groups should be about equal (violated)
+```{r}
+new_data %>% group_by(CONTROL) %>% summarise(variance = var(EARN_MDN_1YR, na.rm = TRUE), std_dev = sd(EARN_MDN_1YR, na.rm = TRUE), mean_val= mean(EARN_MDN_1YR,na.rm = TRUE))
+```
+```{r}
+check_homogeneity(model)
+```
+## year 2 data
+```{r}
+new_data %>% ggplot(aes(x = CONTROL, y = EARN_NE_MDN_3YR)) + geom_boxplot()
+```
+
+
+```{r}
+school_type_bachelors <- example_data %>% 
+  group_by(school_type) %>% 
+  filter(CREDLEV == 3) %>%
+  summarise(mean_income =  mean(median_earnings_1yr, na.rm = TRUE))
+school_type_bachelors
+```
+```{r}
+school_type_combined <- example_data %>% 
+  filter(CREDLEV == 3)
+  group_by(school_type) %>% 
+  summarise(mean_income =  mean(median_earnings_1yr, na.rm = TRUE))
+school_type_combined
+
+```
+
+
+```{r}
+new_data %>% 
+  filter(CONTROL == "Private, for-profit") %>% 
+  ggplot(aes(x = EARN_NE_MDN_3YR)) + geom_histogram() + 
+  ggtitle("Income of for profit private schools Histogram") + 
+  xlab("Median 3 year income")
+```
+```{r}
+example_data %>%
+  filter(CREDLEV == 3) %>%
+  group_by(school_type) %>% 
+  summarise(variance = var(median_earnings_1yr, na.rm = TRUE), 
+            std_dev = sd(median_earnings_1yr, na.rm = TRUE), 
+            mean_val= mean(median_earnings_1yr,na.rm = TRUE), 
+            max_val = max(median_earnings_1yr, na.rm = TRUE), 
+            min_val  = min(median_earnings_1yr,na.rm = TRUE),
+            )
+```
+```{r}
+no_na <- example_data %>% filter(is.na(median_earnings_1yr) == FALSE)
+ bachelors_count <- no_na  %>%
+  filter(CREDLEV == 3) %>%
+  group_by(school_type) %>%
+  count(school_type)
+```
+```{r}
+bachelors_count %>% rename(value_count = n)
+```
+```{r}
+masters_count <- no_na %>%
+  filter(CREDLEV == 5)%>%
+  group_by(school_type) %>%
+  count(school_type)
+masters_count %>% rename(value_count = n)
+```
+
+
+```{r}
+example_data %>%
+  filter(CREDLEV == 5) %>%
+  group_by(school_type) %>%
+  count(school_type)
+```
+
+
+## ANOVA for 3 years post graduation outcomes
+```{r}
+new_data %>%
+  aov(EARN_NE_MDN_3YR ~ CONTROL, data = .) %>%
+  TukeyHSD()
+```
+## Bachelor degree data
+```{r}
+example_data %>%
+  filter(CREDLEV == 3) %>%
+  ggplot(aes(x = school_type, y = median_earnings_1yr)) + geom_boxplot() + ylab("Median Income") + xlab("Education Type") + ggtitle("Bachelors Degree at different institutions Vs 1 Year Post Graduation Income")
+```
+
+```{r}
+example_data %>% 
+  filter(school_type == "Private, nonprofit" & CREDLEV == 3) %>% 
+  ggplot(aes(x = median_earnings_1yr)) + 
+    geom_histogram() + 
+    ggtitle("Income of Bachelor Degrees of Private, nonprofit Schools Histogram") + 
+    xlab("Median 1 year income")
+```
+```{r}
+example_data %>% 
+  filter(school_type == "Private, nonprofit" & CREDLEV == 3) %>% 
+  ggplot(aes(sample = median_earnings_1yr)) + 
+  stat_qq() +
+  stat_qq_line() +
+  ggtitle("QQ Plot of Bachelor Degrees for Private, nonprofit Schools")
+```
+```{r}
+private_nonprofit_bachelors <- example_data %>% 
+  filter(school_type == "Private, nonprofit" & CREDLEV ==  3)
+ggdensity(private_nonprofit_bachelors$median_earnings_1yr,add = "mean")
+```
+
+
+
+
+
+```{r}
+example_data %>% 
+  filter(school_type == "Private, for-profit" & CREDLEV == 3) %>% 
+  ggplot(aes(x = median_earnings_1yr)) + 
+    geom_histogram() + 
+    ggtitle("Income of Bachelor Degrees of Private, for-profit Schools Histogram") + 
+    xlab("Median 1 year income")
+```
+```{r}
+example_data %>% 
+  filter(school_type == "Private, for-profit" & CREDLEV == 3) %>% 
+  ggplot(aes(sample = median_earnings_1yr)) + 
+  stat_qq() +
+  stat_qq_line() +
+  ggtitle("QQ Plot of Bachelor Degrees for Private, for-profit Schools")
+```
+
+```{r}
+private_forprofit_bachelors <- example_data %>% 
+  filter(school_type == "Private, for-profit" & CREDLEV ==  3)
+ggdensity(private_forprofit_bachelors$median_earnings_1yr,add = "mean") 
+```
+```{r}
+example_data %>% 
+  filter(school_type == "Public" & CREDLEV == 3) %>% 
+  ggplot(aes(x = median_earnings_1yr)) + 
+    geom_histogram() + 
+    ggtitle("Income of Bachelor Degrees of Public Schools Histogram") + 
+    xlab("Median 1 year income")
+```
+```{r}
+example_data %>% 
+  filter(school_type == "Public" & CREDLEV == 3) %>% 
+  ggplot(aes(sample = median_earnings_1yr)) + 
+  stat_qq() +
+  stat_qq_line() +
+  ggtitle("QQ Plot of Bachelor Degrees for Public Schools")
+```
+```{r}
+public_bachelors <- example_data %>% 
+  filter(school_type == "Public" & CREDLEV ==  3)
+ggdensity(public_bachelors$median_earnings_1yr,add = "mean") 
+```
+
+
+
+
+```{r}
+example_data %>%
+  filter(CREDLEV == 3)%>%
+  group_by(school_type) %>% 
+  summarise(variance = var(median_earnings_1yr, na.rm = TRUE), std_dev = sd(median_earnings_1yr, na.rm = TRUE), mean_val= mean(median_earnings_1yr,na.rm = TRUE))
+```
+
+
+
+
+
+
+
+
+
+```{r}
+model2 <- example_data %>% 
+  filter(CREDLEV == 3) %>%
+  aov(median_earnings_1yr ~ school_type, data = .)
+```
+```{r}
+model2 %>% summary()
+```
+
+```{r}
+TukeyHSD(model2)
+```
+```{r}
+bachelors_var <- example_data %>% 
+  filter(CREDLEV == 3)
+leveneTest(median_earnings_1yr ~ school_type, data = bachelors_var)
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(model2)
+par(mfrow=c(1,1))
+```
+
+
+```{r fig.height= 8}
+par(mar = c(15,15,2,9))
+
+plot(TukeyHSD(model2, conf.level = .95), las = 2, cex.axis = 0.75) 
+```
+## Masters degree data
+
+
+```{r}
+example_data %>%
+  filter(CREDLEV == 5) %>%
+  group_by(school_type) %>% 
+  summarise(variance = var(median_earnings_1yr, na.rm = TRUE), 
+            std_dev = sd(median_earnings_1yr, na.rm = TRUE), 
+            mean_val= mean(median_earnings_1yr,na.rm = TRUE), 
+            max_val = max(median_earnings_1yr, na.rm = TRUE), 
+            min_val  = min(median_earnings_1yr,na.rm = TRUE)
+            )
+```
+
+```{r}
+example_data %>% 
+  filter(school_type == "Private, nonprofit" & CREDLEV == 5) %>% 
+  ggplot(aes(x = median_earnings_1yr)) + 
+    geom_histogram() + 
+    ggtitle("Income of Master's Degrees of Private, nonprofit Schools Histogram") + 
+    xlab("Median 1 year income")
+```
+```{r}
+example_data %>% 
+  filter(school_type == "Private, nonprofit" & CREDLEV == 5) %>% 
+  ggplot(aes(sample = median_earnings_1yr)) + 
+  stat_qq() +
+  stat_qq_line() +
+  ggtitle("QQ Plot of Master's Degrees for Private, nonprofit Schools")
+```
+
+```{r}
+private_nonprofit_masters <- example_data %>% 
+  filter(school_type == "Private, nonprofit" & CREDLEV ==  5)
+ggdensity(private_nonprofit_masters$median_earnings_1yr,add = "mean")
+```
+
+```{r}
+example_data %>% 
+  filter(school_type == "Private, for-profit" & CREDLEV == 5) %>% 
+  ggplot(aes(x = median_earnings_1yr)) + 
+    geom_histogram() + 
+    ggtitle("Income of Master's Degrees of Private, for-profit Schools Histogram") + 
+    xlab("Median 1 year income")
+```
+```{r}
+example_data %>% 
+  filter(school_type == "Private, for-profit" & CREDLEV == 5) %>% 
+  ggplot(aes(sample = median_earnings_1yr)) + 
+  stat_qq() +
+  stat_qq_line() +
+  ggtitle("QQ Plot of Master's Degrees for Private, for-profit Schools")
+```
+
+```{r}
+private_forprofit_masters <- example_data %>% 
+  filter(school_type == "Private, for-profit" & CREDLEV ==  5)
+ggdensity(private_forprofit_masters$median_earnings_1yr,add = "mean")
+```
+
+```{r}
+example_data %>% 
+  filter(school_type == "Public" & CREDLEV == 5) %>% 
+  ggplot(aes(x = median_earnings_1yr)) + 
+    geom_histogram() + 
+    ggtitle("Income of Master's Degrees of Public Schools Histogram") + 
+    xlab("Median 1 year income")
+```
+```{r}
+example_data %>% 
+  filter(school_type == "Public" & CREDLEV == 5) %>% 
+  ggplot(aes(sample = median_earnings_1yr)) + 
+  stat_qq() +
+  stat_qq_line() +
+  ggtitle("QQ Plot of Master's Degrees for Public Schools")
+```
+
+```{r}
+private_public_masters <- example_data %>% 
+  filter(school_type == "Public" & CREDLEV ==  5)
+ggdensity(private_forprofit_masters$median_earnings_1yr,add = "mean")
+```
+```{r}
+example_data %>%
+  filter(CREDLEV == 5)%>%
+  group_by(school_type) %>% 
+  summarise(variance = var(median_earnings_1yr, na.rm = TRUE), std_dev = sd(median_earnings_1yr, na.rm = TRUE), mean_val= mean(median_earnings_1yr,na.rm = TRUE))
+```
+
+```{r}
+masters_var <- example_data %>% 
+  filter(CREDLEV == 5)
+leveneTest(median_earnings_1yr ~ school_type, data = masters_var)
+```
+
+
+
+
+```{r}
+model3 <- example_data %>% 
+  filter(CREDLEV == 5) %>%
+  aov(median_earnings_1yr ~ school_type, data = .)
+```
+```{r}
+model3 %>% summary()
+```
+```{r}
+ggqqplot(residuals(model3)) + ggtitle("Residuals of Model at Master's Degree Level")
+```
+```{r}
+  ggplot(aes(x = residuals(model3))) + geom_histogram() + 
+  ggtitle("Income of for profit private schools Histogram") + 
+  xlab("Median 1 year income")
+```
+
+```{r}
+ggqqplot(residuals(model2)) + ggtitle("Residuals of Model at Bachelor's Degree Level")
+```
+
+
+
+```{r}
+TukeyHSD(model3)
+```
+
+```{r fig.height= 8}
+par(mar = c(15,15,2,9))
+
+plot(TukeyHSD(model3, conf.level = .95), las = 2, cex.axis = 0.75) 
+```
+```{r}
+example_data %>%
+  filter(CREDLEV == 5) %>%
+  ggplot(aes(x = school_type, y = median_earnings_1yr)) + geom_boxplot() + ylab("Median Income") + xlab("Education Type") + ggtitle("Master's Degree at different institutions Vs 1 Year Post Graduation Income")
+```
+
+## Doctoral Data
+```{r}
+model4 <- example_data %>% 
+  filter(CREDLEV == 6) %>%
+  aov(median_earnings_1yr ~ school_type, data = .)
+```
+```{r fig.height= 8}
+par(mar = c(15,15,2,9))
+
+plot(TukeyHSD(model4, conf.level = .95), las = 2, cex.axis = 0.75) 
+```
+```{r}
+TukeyHSD(model4)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
